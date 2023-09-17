@@ -1,0 +1,111 @@
+#property copyright   
+#property link        
+#property strict
+#property description "Trailing SL and TP"
+
+extern int stoploss             = 100;
+extern int takeprofit           = 50;
+extern int TS=-10000;
+
+double STOPLEVEL;
+
+void OnTick()
+{
+   STOPLEVEL=MarketInfo(Symbol(),MODE_STOPLEVEL);
+   double OSL,OTP,OOP,PR=0,SL=0,TP=0;
+   int i,b=0,s=0,OT=-1;
+   for (i=0; i<OrdersTotal(); i++)
+   {    
+      if (OrderSelect(i,SELECT_BY_POS,MODE_TRADES))
+      {
+         if (OrderSymbol()==Symbol())
+         {
+            OT = OrderType();
+            OSL = NormalizeDouble(OrderStopLoss(),Digits);
+            OTP = NormalizeDouble(OrderTakeProfit(),Digits);
+            OOP = NormalizeDouble(OrderOpenPrice(),Digits);
+            SL=OSL;TP=OTP;
+            if (OT==OP_BUY)            
+            {  
+               b++;
+               if (takeprofit>STOPLEVEL)
+               {
+                  PR = NormalizeDouble(Ask + takeprofit * Point,Digits);
+                  if ((PR < OTP || OTP==0) && (PR - OOP)/Point>=TS) TP = PR;
+               }
+               else TP=0;
+               if (stoploss>STOPLEVEL)
+               {
+                  PR = NormalizeDouble(Bid - stoploss*Point,Digits);
+                  if (PR > OSL && (PR - OOP)/Point>=TS) SL = PR;
+               }
+               else SL=0;
+               if (SL != OSL || TP != OTP)
+               {  
+                  if (!OrderModify(OrderTicket(),OOP,SL,TP,0,clrNONE))
+                  Print("Error OrderModify <<",(GetLastError()),">> ");
+               }
+            }                                        
+            if (OT==OP_SELL)        
+            {
+               s++;
+               if (takeprofit>STOPLEVEL)
+               {
+                  PR = NormalizeDouble(Bid - takeprofit * Point,Digits);
+                  if (PR > OTP && (OOP - PR)/Point>=TS) TP = PR;
+               }
+               else TP=0;
+               if (stoploss>STOPLEVEL)
+               {
+                  PR = NormalizeDouble(Ask + stoploss*Point,Digits);
+                  if ((PR < OSL || OSL==0) && (OOP - PR)/Point>=TS) SL = PR;
+               }
+               else SL=0;
+               if (SL != OSL || TP != OTP)
+               {  
+                  if (!OrderModify(OrderTicket(),OOP,SL,TP,0,clrNONE))
+                     Print("Error OrderModify <<",(GetLastError()),">> ");
+               }
+            }
+         }
+      }
+   }
+   if (IsTesting())
+   {
+      if (b==0) SendOrder(OP_BUY, MarketInfo(Symbol(),MODE_MINLOT), NormalizeDouble(Ask,Digits));
+      if (s==0) SendOrder(OP_SELL, MarketInfo(Symbol(),MODE_MINLOT), NormalizeDouble(Bid,Digits));
+   }
+}
+bool SendOrder(int OT, double lots, double price, double sl=0, double tp=0)
+{
+   if (OT<2)
+   {
+      if (AccountFreeMarginCheck(Symbol(),OT,lots)<0) return(false);
+   }
+   for (int i=0; i<10; i++)
+   {    
+      if (OrderSend(Symbol(),OT, lots,price,100,sl,tp,NULL,0,0,clrNONE)!=-1) return(true);
+      Sleep(500);
+      RefreshRates();
+   }
+   return(false);
+}
+string Strtip(int OT)
+{
+   switch(OT)
+   {
+   case OP_BUY:
+      return("BUY");
+   case OP_SELL:
+      return("SELL");
+   case OP_BUYSTOP:
+      return("BUYSTOP");
+   case OP_SELLSTOP:
+      return("SELLSTOP");
+   case OP_BUYLIMIT:
+      return("BUYLIMIT");
+   case OP_SELLLIMIT:
+      return("SELLLIMIT");
+   }
+   return("error");
+}
